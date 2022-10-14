@@ -103,10 +103,12 @@ def image_detection(image_or_path, network, class_names, class_colors, thresh):
     height = darknet.network_height(network)
     darknet_image = darknet.make_image(width, height, 3)
 
-    if type(image_or_path) == "str":
-        image = cv2.imread(image_or_path)
-    else:
-        image = image_or_path
+    # if type(image_or_path) == "str":
+    #     image = cv2.imread(image_or_path)
+    # else:
+    #     image = image_or_path
+    image = cv2.imread(image_or_path)
+    original_height, original_width, _ = image.shape
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image_resized = cv2.resize(image_rgb, (width, height),
                                interpolation=cv2.INTER_LINEAR)
@@ -115,7 +117,7 @@ def image_detection(image_or_path, network, class_names, class_colors, thresh):
     detections = darknet.detect_image(network, class_names, darknet_image, thresh=thresh)
     darknet.free_image(darknet_image)
     image = darknet.draw_boxes(detections, image_resized, class_colors)
-    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), detections
+    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB), detections, original_height, original_width
 
 
 def batch_detection(network, images, class_names, class_colors,
@@ -151,25 +153,49 @@ def image_classification(image, network, class_names):
     return sorted(predictions, key=lambda x: -x[1])
 
 
-def convert2relative(image, bbox):
+def convert2relative(image, bbox, original_heigth, original_width):
     """
     YOLO format use relative coordinates for annotation
     """
-    x, y, w, h = bbox
+    xcenter, ycenter, w, h = bbox
     height, width, _ = image.shape
-    return x/width, y/height, w/width, h/height
+    #return xcenter/width, ycenter/height, w/width, h/height
+    
+    xcenter = xcenter/width
+    ycenter = ycenter/height
+    w = w/width
+    h = h/height
 
 
-def save_annotations(name, image, detections, class_names):
+    x1 = int((xcenter - (w / 2)) * width)
+    y1 = int((ycenter - (h / 2)) * height)
+    x2 = int((xcenter + (w / 2)) * width)
+    y2 = int((ycenter + (h / 2)) * height)
+
+    xx1 = (x1 * original_width) / width
+    yy1 = (y1 * original_heigth) / height
+    xx2 = (x2 * original_width) / width
+    yy2 = (y2 * original_heigth) / height
+    return xx1, yy1, xx2, yy2
+
+
+def save_annotations(name, image, detections, class_names, original_heigth, original_width):
     """
     Files saved with image_name.txt and relative coordinates
     """
     file_name = os.path.splitext(name)[0] + ".txt"
     with open(file_name, "w") as f:
         for label, confidence, bbox in detections:
-            x, y, w, h = convert2relative(image, bbox)
+            # x, y, w, h = convert2relative(image, bbox)
+            x1, y1, x2, y2 = convert2relative(image, bbox, original_heigth, original_width)
             label = class_names.index(label)
-            f.write("{} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n".format(label, x, y, w, h, float(confidence)))
+            #f.write("{} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n".format(label, x, y, w, h, float(confidence)))
+            f.write("{} {} {} {} {} {}\n".format(label,
+                                                                     float(confidence),
+                                                                     int(x1),
+                                                                     int(y1),
+                                                                     int(x2),
+                                                                     int(y2)))
 
 
 def batch_detection_example():
@@ -216,11 +242,12 @@ def main():
         else:
             image_name = input("Enter Image Path: ")
         prev_time = time.time()
-        image, detections = image_detection(
+
+        image, detections, original_heigth, original_width = image_detection(
             image_name, network, class_names, class_colors, args.thresh
             )
         if args.save_labels:
-            save_annotations(image_name, image, detections, class_names)
+            save_annotations(image_name, image, detections, class_names, original_heigth, original_width)
         darknet.print_detections(detections, args.ext_output)
         fps = int(1/(time.time() - prev_time))
         print("FPS: {}".format(fps))
