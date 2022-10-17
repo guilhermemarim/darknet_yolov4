@@ -190,8 +190,8 @@ def save_annotations(name, image, detections, class_names, original_heigth, orig
             x1, y1, x2, y2 = convert2relative(image, bbox, original_heigth, original_width)
             label = class_names.index(label)
             #f.write("{} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}\n".format(label, x, y, w, h, float(confidence)))
-            f.write("{} {} {} {} {} {}\n".format(label,
-                                                                     float(confidence),
+            f.write("{} {:.4f} {} {} {} {}\n".format(label,
+                                                                     float(confidence)/100,
                                                                      int(x1),
                                                                      int(y1),
                                                                      int(x2),
